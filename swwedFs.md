@@ -263,7 +263,7 @@ http://localhost:9333/dir/assign?dataCenter=dc1
 
 **master 拓扑**
 
-![](sweed5.jpg)  
+![](./sweed5.jpg)  
 
 ​      seaweedfs拓扑结构主要有三个概念，数据中心(DataCenter)，机架(Rack)，数据节点(DataNode)；这样可以很灵活配置不同数据中心，同一个数据中心下不同机架，同一机架下不同的数据节点；数据都是存储在DataNode中。
 
