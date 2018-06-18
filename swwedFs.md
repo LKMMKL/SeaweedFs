@@ -2,7 +2,7 @@
 
 **读该文档时，可先阅读文档底部的Seaweed拓扑结构，有利于了解该文件系统**
 
-[SeaweedFs 拓扑结构]:
+
 
 [SeaweedFs 拓扑结构](#jump)
 
