@@ -1,4 +1,4 @@
-**主要对官方文档大部分进行了翻译，并加入了自己的了解，可以与官方文档结构学习**
+**主要对官方文档大部分进行了翻译，并加入了自己的了解，可以与[官方文档](https://github.com/igool/seaweedfs)结构学习**
 
 **读该文档时，可先阅读文档底部的Seaweed拓扑结构，有利于了解该文件系统**
 
@@ -263,7 +263,7 @@ http://localhost:9333/dir/assign?dataCenter=dc1
 
 **master 拓扑**
 
-![](https://github.com/LKMMKL/SeaweedFs/blob/master/sweed5.PNG)  
+![](https://github.com/LKMMKL/SeaweedFs/blob/master/sweed5.JPG)  
 
 ​      seaweedfs拓扑结构主要有三个概念，数据中心(DataCenter)，机架(Rack)，数据节点(DataNode)；这样可以很灵活配置不同数据中心，同一个数据中心下不同机架，同一机架下不同的数据节点；数据都是存储在DataNode中。
 
