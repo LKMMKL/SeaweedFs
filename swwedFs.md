@@ -65,6 +65,10 @@ SeaweedFs 使用HTTP REST操作读，写，删除行为。返回结果是JSON或
 > weed volume -dir="/tmp/data2" -max=10 -mserver="localhost:9333" -port=8081 &
 ~~~
 
+**-max 表示卷服务器中最多可以存在的卷数量，一个dat文件代表一个卷。**
+
+
+
 ### 写文件
 
 上传文件。首先要发送一个HTTP POST，PUT或者GET请求到 `/dir/assign` ,获取fid和卷服务器地址。
@@ -80,6 +84,51 @@ SeaweedFs 使用HTTP REST操作读，写，删除行为。返回结果是JSON或
 curl -X PUT -F file=@C:\Users\lkm\Desktop\untitled.jpg http://127.0.0.1:8082/5,017f524ccc
 {"name":"untitled.jpg","size":54584}
 ~~~
+
+
+
+可以直接使用submit,则不需要再提前获取fid,它会先进行存储，再返回fid。
+
+```
+curl -F file=@C:\Users\lkm\Desktop\untitled.jpg http://127.0.0.1:9333/submit
+{"fid":"6,02ee9e1d62","fileName":"untitled.jpg","fileUrl":"127.0.0.1:8082/6,02ee9e1d62","size":54584}
+```
+
+#### collection
+
+启动 volumeServer
+
+~~~
+weed volume -dir="D:\ZhongYe\seaweedfs\seaweedfs\2" -max=5 -mserver="localhost:9333" -port=8083
+~~~
+
+分配fid，**它会将所有空余卷服务器的卷都整合成一个collection。**
+
+~~~
+curl -X POST http://localhost:9333/dir/assign?collection=pictures
+{"fid":"10,039b0b8e05","url":"127.0.0.1:8083","publicUrl":"127.0.0.1:8083","count":1}
+~~~
+
+~~~
+curl -X POST http://localhost:9333/dir/assign?collection=map
+{"error":"No free volumes left!"}
+~~~
+
+~~~
+curl -X POST http://localhost:9333/dir/assign?collection=pictures
+{"fid":"7,042c5762d4","url":"127.0.0.1:8083","publicUrl":"127.0.0.1:8083","count":1}
+~~~
+
+1. 因为默认情况下，VolumeServer 启动时， 未申请任何 Volume，当第一次 `/dir/assign `的时候， 会分配 Volume，因为`weed volume `的参数 `-max=5 `所以一次性分配 5 个 Volume ，并且这 5 个 Volume 的 Collection 属性都是 pictures， 甚至可以看到卷服务器下：
+
+​      ![](D:\ZhongYe\seaweedfs\seaweedfs\oll.png)
+
+可以看出每个卷的文件名以 Collection 来命名。
+
+2. 因为已有的 5 个 Volume 的 Collection 属性都是 pictures， 所以此时如果需要 `/dir/assign `一个非 pictures Collection 的 Fid 时失败，如果有非coolection的volume存在，则成功。
+3. 当申请一个属于 pictures Collection 的 Fid 成功。也就是在每次申请 Fid 时，会针对 Collection 进行检查，来保证存入 Volume 的每个 Needle 所属的 Collection 一致。 在实际应用中可以通过 Collection 来类别的片。
+
+---
 
 
 
@@ -265,6 +314,8 @@ http://localhost:9333/dir/assign?dataCenter=dc1
 
 ![](https://github.com/LKMMKL/SeaweedFs/blob/master/sweed5.JPG)  
 
+​     **每个 MasterServer 通过 Topology 维护多个 VolumeServer 。**
+
 ​      seaweedfs拓扑结构主要有三个概念，数据中心(DataCenter)，机架(Rack)，数据节点(DataNode)；这样可以很灵活配置不同数据中心，同一个数据中心下不同机架，同一机架下不同的数据节点；数据都是存储在DataNode中。
 
 ------
@@ -279,4 +330,100 @@ http://localhost:9333/dir/assign?dataCenter=dc1
 ------
 
 
+
+## 集群
+
+首先开启三个master
+
+~~~
+mater1:启动master1后，由于只有这一个master，因此将自己选为leader,master2、master3启动后，加入到以master1为leader的 master集群。
+weed -v=3 master -port=9333 -mdir=D:\ZhongYe\seaweedfs\seaweedfs\mdata -  peers=localhost:9333,localhost:9334,localhost:9335 -defaultReplication=100
+
+master2:
+weed -v=3 master -port=9334 -mdir=D:\ZhongYe\seaweedfs\seaweedfs\mdata2 -peers=localhost:9333,localhost:9334,localhost:9335 -defaultReplication=100
+
+master3:
+weed -v=3 master -port=9335 -mdir=D:\ZhongYe\seaweedfs\seaweedfs\mdata3 -peers=localhost:9333,localhost:9334,localhost:9335 -defaultReplication=100
+~~~
+
+再开启三个volumeServer,设置不同的dataCenter
+
+~~~
+weed volume -port=8081 -dir=D:\ZhongYe\seaweedfs\seaweedfs\1 -mserver=localhost:9333 -dataCenter=dc1
+
+weed volume -port=8081 -dir=D:\ZhongYe\seaweedfs\seaweedfs\2 -mserver=localhost:9333 -dataCenter=dc1
+
+weed volume -port=8081 -dir=D:\ZhongYe\seaweedfs\seaweedfs\3 -mserver=localhost:9333 -dataCenter=dc2
+~~~
+
+这个时候卷里面还没有dat , idx文件
+
+存储文件
+
+~~~
+curl -F file=@C:\Users\lkm\Desktop\untitled.jpg http://localhost:9333/submit
+{"fid":"11,053fdc0fa6","fileName":"untitled.jpg","fileUrl":"127.0.0.1:8082/11,053fdc0fa6","size":54584}
+
+文件存储在id为11的volume中，文件夹2和文件夹3中都有11.dat,因此文件在这两个文件夹中都有存储。
+~~~
+
+读取文件
+
+~~~
+//使用8082 和 8083 都可以访问到文件
+curl http://127.0.0.1:8082/11,053fdc0fa6
+curl http://127.0.0.1:8083/11,053fdc0fa6
+
+//如果使用8081，得不到文件内容，只有一个链接
+curl http://127.0.0.1:8081/11,053fdc0fa6
+<a href="http://127.0.0.1:8082/11,053fdc0fa6">Moved Permanently</a>
+
+//可以使用 -L 进行重定向，这样可以访问到文件
+curl -L http://127.0.0.1:8081/11,053fdc0fa6
+
+//如果使用master进行读取，master会轮询式返回8082和8083，这里同样可以使用重定向
+curl http://127.0.0.1:9333/11,053fdc0fa6
+<a href="http://127.0.0.1:8082/11,053fdc0fa6">Moved Permanently</a>.
+
+curl http://127.0.0.1:9333/11,053fdc0fa6
+<a href="http://127.0.0.1:8083/11,053fdc0fa6">Moved Permanently</a>.
+~~~
+
+删除文件
+
+~~~
+//文件夹2和文件夹3都进行删除，无论使用volume还是master都无法访问文件
+curl -X DELETE http://127.0.0.1:8082/11,053fdc0fa6
+{"size":54584}
+
+//可以查询文件详细信息
+curl -i  http://127.0.0.1:8082/11,053fdc0fa6
+HTTP/1.1 404 Not Found
+Date: Thu, 20 Aug 2015 08:13:28 GMT
+Content-Length: 0
+Content-Type: text/plain; charset=utf-8
+~~~
+
+手工清除：
+
+删除hello.txt后，volume server下的数据文件的size却并没有随之减小，别担心，这就是weed-fs的处理方法，这些数据删除后遗留下来的空洞需要手工清除（对数据文件 进行手工紧缩）
+
+~~~
+curl "http://localhost:9335/vol/vacuum"
+{"Topology":{"DataCenters":[{"Free":8,"Id":"dc1","Max":14,"Racks":[{"DataNodes":[{"Free":4,"Max":7,"PublicUrl":"127.0.0.1:8081","Url":"127.0.0.1:8081","Volumes":3},{"Free":4,"Max":7,"PublicUrl":"127.0.0.1:8082","Url":"127.0.0.1:8082","Volumes":3}],”Free”:8,”Id”:”DefaultRack”,”Max”:14}]},{“Free”:1,”Id”:”dc2″,”Max”:7,”Racks”:[{"DataNodes":[{"Free":1,"Max":7,"PublicUrl":"127.0.0.1:8083","Url":"127.0.0.1:8083","Volumes":6}],”Free”:1,”Id”:”DefaultRack”,”Max”:7}]}],”Free”:9,”Max”:21,”layouts”:[{"collection":"","replication":"100","ttl":"","writables":[1,2,3,4,5,6]}]},"Version":"0.70 beta"}
+
+查看dat文件，size减小了。
+~~~
+
+
+
+**一致性**
+
+在分布式系统中，“一致性”是永恒的难题。weed-fs支持replication，其多副本的数据一致性需要保证。
+
+weed-fs理论上采用了是一种“强一致性”的策略，即：
+
+存储文件时，当多个副本都存储成功后，才会返回成功；任何一个副本存储失败，此次存储操作则返回失败。
+
+删除文件时，当所有副本都删除成功后，才返回成功；任何一个副本删除失败，则此次删除操作返回失败。
 
